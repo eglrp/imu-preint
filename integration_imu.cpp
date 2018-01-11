@@ -53,7 +53,18 @@ namespace ceres{
         }
 
 
- void BuildOptimizationProblem(std::map<int,Eigen::Quaterniond> &temp_map,MapOfPoses* vertex,MapOfPoses* poses, ceres::Problem* problem){
+ void BuildOptimizationProblem(std::map<int,Eigen::Quaterniond> &temp_map,MapOfPoses* poses, ceres::Solver::Summary* summary){
+
+
+	 	 	 std::fstream outfile;
+	         outfile.open("poses_at_each_step.txt", std::istream::out);
+
+	 	 	ceres::Problem problem;
+	 	 	ceres::Solver::Options solver_options;
+	 	 	solver_options.minimizer_progress_to_stdout = true;
+	 	 	solver_options.max_num_consecutive_invalid_steps = 1000;
+
+	 	 	//ceres::Solver::Summary summary;
 
             ceres::LossFunction* loss_function = NULL;
             ceres::LocalParameterization *quaternion_local_parameterization = new EigenQuaternionParameterization;
@@ -97,9 +108,9 @@ for (std::map<int,Pose3d,std::less<int>, Eigen::aligned_allocator<std::pair<cons
 
                   ceres::CostFunction* cost_function = PoseError::Create(index,Omega_Q);
 
-                  problem->AddResidualBlock(cost_function,loss_function,current_pose_to_optimize->second.q.coeffs().data());
+                  problem.AddResidualBlock(cost_function,loss_function,current_pose_to_optimize->second.q.coeffs().data());
 
-                  problem->SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+                  problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
 
 
                  //Enter if loop when the next pose data is obtained.
@@ -115,19 +126,31 @@ for (std::map<int,Pose3d,std::less<int>, Eigen::aligned_allocator<std::pair<cons
                  ceres::CostFunction* constraint_cost_function = IMUFunctor::Create(Constraint_imu);
 
                  MapOfPoses::iterator prev_pose_to_optimize = poses->find(index-1);
-                 //std::cout<<&prev_pose_to_optimize<<std::endl;
-                 //std::cout<<&current_pose_to_optimize<<std::endl;
 
-                 problem->AddResidualBlock(constraint_cost_function,
+
+                 problem.AddResidualBlock(constraint_cost_function,
                 		 	 	 	 	 	 	 loss_function,
 												 prev_pose_to_optimize->second.q.coeffs().data(),
 												 	 current_pose_to_optimize->second.q.coeffs().data());
 
-                 problem->SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
-                 problem->SetParameterization(prev_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+                 problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+                 problem.SetParameterization(prev_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
                  }
 
-                index=index+1;
+                 ceres::Solve(solver_options,&problem,summary);
+
+
+                 for (std::map<int,Pose3d,std::less<int>, Eigen::aligned_allocator<std::pair<const int,Pose3d> > >::const_iterator poses_op_iter =poses->begin();poses_op_iter!=poses->end();++poses_op_iter){
+
+                	 	 const std::map<int, Pose3d, std::less<int>, Eigen::aligned_allocator<std::pair<const int,Pose3d> > >::value_type& pair_op =*poses_op_iter;
+
+                	 	 outfile <<index<<" "<<pair_op.first<<" "<<pair_op.second.q.w()<<" "<<pair_op.second.q.x()<<" "<< pair_op.second.q.y()<<" "<<pair_op.second.q.z() <<std::endl;
+
+                 }
+
+
+                 index=index+1;
+
 
                 //std::cout<<pair.first<<std::endl;
                 //std::cout<<pair.second.q.w()<<std::endl;
@@ -152,14 +175,14 @@ int main(int argc, char** argv)
 
 
     ceres::examples::MapOfPoses poses;
-    ceres::examples::MapOfPoses vertex;
+
     ceres::examples::VectorOfConstraints constraints;
     ceres::examples::VectorOfConstraints c;
 
     //Poses to store as Estimated Pose
     ceres::examples::ReadFile(FLAGS_input,&poses,&constraints);
     //Vertex to store as Measured Pose
-    ceres::examples::ReadFile(FLAGS_input,&vertex,&c);
+
 
 
     int count =0;
@@ -223,15 +246,16 @@ int main(int argc, char** argv)
      std::cout<<"pereint"<<it->second.y()<<std::endl;
      std::cout<<"pereint"<<it->second.z()<<std::endl;
      }*/
-
-    ceres::Problem problem;
-    ceres::examples::BuildOptimizationProblem(Preintegrated_omega,&vertex,&poses,&problem);
-    ceres::Solver::Options solver_options;
-    solver_options.minimizer_progress_to_stdout = true;
-    solver_options.max_num_consecutive_invalid_steps = 1000;
-
     ceres::Solver::Summary summary;
-    ceres::Solve(solver_options,&problem,&summary);
+
+    //ceres::Problem problem;
+    ceres::examples::BuildOptimizationProblem(Preintegrated_omega,&poses,&summary);
+    //ceres::Solver::Options solver_options;
+    //solver_options.minimizer_progress_to_stdout = true;
+    //solver_options.max_num_consecutive_invalid_steps = 1000;
+
+   // ceres::Solver::Summary summary;
+    //ceres::Solve(solver_options,&problem,&summary);
     std::cout<<summary.FullReport()<<std::endl;
 
 
