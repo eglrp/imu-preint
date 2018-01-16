@@ -44,7 +44,7 @@ namespace ceres{
 
                 if(poses_iter-> first == 5)
                 {
-                    std::cout<<pair.first<<std::endl;
+                    //std::cout<<pair.first<<std::endl;
                 }
             }
 
@@ -93,17 +93,18 @@ for (std::map<int,Pose3d,std::less<int>, Eigen::aligned_allocator<std::pair<cons
                  MapOfPoses::iterator current_pose_to_optimize = poses->find(index);
 
 
-
                   Eigen::Quaternion<double> Omega_Q;
                   Eigen::Quaternion<double> Constraint_imu;
 
                   Omega_Q = Eigen::Quaternion<double>::Quaternion(pair.second.q.w(),pair.second.q.x(),pair.second.q.y(),pair.second.q.z());
-                  	  	  /*
-                  current_pose_to_optimize -> second.q.w () =0.6536;
+
+                  /*current_pose_to_optimize -> second.q.w () =1;
                   current_pose_to_optimize -> second.q.x () =0;
-                  current_pose_to_optimize -> second.q.y () =0.7568;
-                  current_pose_to_optimize -> second.q.z () =0;
-                  std::cout<<"answer"<<current_pose_to_optimize->second.q.w()<<std::endl;*/
+                  current_pose_to_optimize -> second.q.y () =0;
+                  current_pose_to_optimize -> second.q.z () =0;*/
+
+
+                  //std::cout<<"answer"<<current_pose_to_optimize->second.q.w()<<std::endl;
                   ///Constraint_imu = Eigen::Quaternion<double>::Quaternion(preint_constraint->second.w(),preint_constraint->second.x(),preint_constraint->second.y(),preint_constraint->second.z());
 
                   ceres::CostFunction* cost_function = PoseError::Create(index,Omega_Q);
@@ -117,15 +118,17 @@ for (std::map<int,Pose3d,std::less<int>, Eigen::aligned_allocator<std::pair<cons
 
                  if(index>0){
 
-
-
                 	 std::map<int,Eigen::Quaterniond>::iterator preint_constraint= temp_map.find(index);
+                	 /*
+                	 std::cout<<"constraint"<<preint_constraint->second.w()<<std::endl;
+                	 std::cout<<"constraint"<<preint_constraint->second.x()<<std::endl;
+                	 std::cout<<"constraint"<<preint_constraint->second.y()<<std::endl;
+                	 std::cout<<"constraint"<<preint_constraint->second.z()<<std::endl;*/
                 	 Constraint_imu = Eigen::Quaternion<double>::Quaternion(preint_constraint->second.w(),preint_constraint->second.x(),preint_constraint->second.y(),preint_constraint->second.z());
+                	 //std::cout<<Constraint_imu.w()<<std::endl;
 
-
+                	 MapOfPoses::iterator prev_pose_to_optimize = poses->find(index-1);
                  ceres::CostFunction* constraint_cost_function = IMUFunctor::Create(Constraint_imu);
-
-                 MapOfPoses::iterator prev_pose_to_optimize = poses->find(index-1);
 
 
                  problem.AddResidualBlock(constraint_cost_function,
@@ -135,9 +138,18 @@ for (std::map<int,Pose3d,std::less<int>, Eigen::aligned_allocator<std::pair<cons
 
                  problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
                  problem.SetParameterization(prev_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+
                  }
+// end if loop to add IMU Functor
+
 
                  ceres::Solve(solver_options,&problem,summary);
+                 index=index+1;
+
+                 std::cout<<"after_optimization x "<<current_pose_to_optimize->second.q.x()<<std::endl;
+                 std::cout<<"after_optimization y "<<current_pose_to_optimize->second.q.y()<<std::endl;
+                 std::cout<<"after_optimization z "<<current_pose_to_optimize->second.q.z()<<std::endl;
+                 std::cout<<"after_optimization w "<<current_pose_to_optimize->second.q.w()<<std::endl;
 
 
                  for (std::map<int,Pose3d,std::less<int>, Eigen::aligned_allocator<std::pair<const int,Pose3d> > >::const_iterator poses_op_iter =poses->begin();poses_op_iter!=poses->end();++poses_op_iter){
@@ -148,13 +160,6 @@ for (std::map<int,Pose3d,std::less<int>, Eigen::aligned_allocator<std::pair<cons
 
                  }
 
-
-                 index=index+1;
-
-
-                //std::cout<<pair.first<<std::endl;
-                //std::cout<<pair.second.q.w()<<std::endl;
-                //std::cout<<pair.second.q.coeffs().data()<<std::endl;
 
             }//for loop
 
@@ -185,8 +190,8 @@ int main(int argc, char** argv)
 
 
 
-    int count =0;
-    int index=1;
+    int count = 0;
+    int index = 1;
 
     //map to store preintegrated omega
     std::map<int,Eigen::Quaterniond> Preintegrated_omega;
@@ -207,29 +212,39 @@ int main(int argc, char** argv)
         const ceres::examples::Constraint3d& constraint = *constraints_iter;
         count = count +1;
 
+
         Omegahat <<0, -constraint.o.z(), constraint.o.y(),
         constraint.o.z(),0,-constraint.o.x(),
         -constraint.o.y(),constraint.o.x(),0;
 
-        Omegahatx = originOmega*Omegahat.exp();
+        Omegahatx = originOmega * Omegahat.exp();
+
         originOmega = Omegahatx;
+
+
 
         if (count%4==0)
         {
-        		std::cout<<Omegahatx<<std::endl;
+        		//std::cout<<"Enter loop"<<std::endl;
+        		//std::cout<<Omegahatx<<std::endl;
+
+        		/*
         		Eigen::Matrix3d m;
         		m<<Omegahatx(0,0),Omegahatx(0,1),Omegahatx(0,2),
         				Omegahatx(1,0),Omegahatx(1,1),Omegahatx(1,2),
 						Omegahatx(2,0),Omegahatx(2,1),Omegahatx(2,2);
 
-        		std::cout<<m<<std::endl;
-        		Eigen::Quaterniond omega_q(m);
+        		std::cout<<m<<std::endl;*/
+
+        		Eigen::Quaterniond omega_q(Omegahatx);
 
             omega_q.normalize();
 
-            std::cout<<"omega_q"<<omega_q.w()<<std::endl;
-            std::cout<<"omega_q"<<omega_q.y()<<std::endl;
-            omega_q.normalize();
+            //std::cout<<"omega_q"<<omega_q.w()<<std::endl;
+            //std::cout<<"omega_q"<<omega_q.x()<<std::endl;
+            //std::cout<<"omega_q"<<omega_q.y()<<std::endl;
+            //std::cout<<"omega_q"<<omega_q.z()<<std::endl;
+
             Preintegrated_omega[index] = omega_q;
             index = index+1;
             originOmega = Eigen::Matrix<double,3,3>::Identity();
@@ -237,10 +252,11 @@ int main(int argc, char** argv)
 
     }//for loop
 
-    /*
+/*
     for (it=Preintegrated_omega.begin();it!=Preintegrated_omega.end();++it)
      {
-
+    	std::cout<<"preint first"<<it->first<<std::endl;
+    	std::cout<<"print omega"<<std::endl;
      std::cout<<"pereint"<<it->second.w()<<std::endl;
      std::cout<<"pereint"<<it->second.x()<<std::endl;
      std::cout<<"pereint"<<it->second.y()<<std::endl;
@@ -259,7 +275,7 @@ int main(int argc, char** argv)
     std::cout<<summary.FullReport()<<std::endl;
 
 
-    ceres::examples::OutputPoses("poses_optimized.txt",poses);
+    ceres::examples::OutputPoses("poses_optimized_noisy.txt",poses);
 
     return 0;
 }

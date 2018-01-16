@@ -18,14 +18,38 @@ class IMUFunctor{
 	template <typename T>
 	bool operator() (const T* const robot_pose_estimated_prev, const T* const robot_pose_estimated_curr, T* residual) const{
 
+  	 // std::cout<<"constraint in functor"<<constraint_.w()<<std::endl;
+  	  //std::cout<<constraint_.x()<<std::endl;
+  	  //std::cout<<constraint_.y()<<std::endl;
+  	  //std::cout<<constraint_.z()<<std::endl;
+
 	Eigen::Map<const Eigen::Quaternion<T> > pose_hat_curr(robot_pose_estimated_curr);
 	Eigen::Map<const Eigen::Quaternion<T> > pose_hat_prev(robot_pose_estimated_prev);
 	Eigen::Quaternion<T> constraint_q = constraint_.template cast<T>();
 
-	Eigen::Quaternion<T> delta = pose_hat_prev * pose_hat_curr.conjugate() * constraint_q;
-	Eigen::Map<Eigen::Matrix<T,3,1> > residuals(residual);
-	residuals = delta.vec();
+	Eigen::Quaternion<T> delta = constraint_q.conjugate() * pose_hat_prev.conjugate() * pose_hat_curr;
+	//Eigen::Quaternion<T> delta = (pose_hat_curr.conjugate() * pose_hat_prev * constraint_q);
 
+
+	/*
+	std::cout<<"delta"<<delta.w()<<std::endl;
+	std::cout<<"delta"<<delta.x()<<std::endl;
+	std::cout<<"delta"<<delta.y()<<std::endl;
+	std::cout<<"delta"<<delta.z()<<std::endl;
+	std::cout<<"HI"<<std::endl;*/
+	Eigen::Map<Eigen::Matrix<T,3,1> > residuals(residual);
+	residuals = T(8.0)* delta.vec();
+
+	std::cout<<"current robot pose W"<<robot_pose_estimated_curr[0]<<std::endl;
+	std::cout<<robot_pose_estimated_curr[1]<<std::endl;
+	std::cout<<robot_pose_estimated_curr[2]<<std::endl;
+	std::cout<<robot_pose_estimated_curr[3]<<std::endl;
+
+
+	std::cout<<"previous robot pose W"<<robot_pose_estimated_prev[0]<<std::endl;
+	std::cout<<robot_pose_estimated_prev[1]<<std::endl;
+	std::cout<<robot_pose_estimated_prev[2]<<std::endl;
+	std::cout<<robot_pose_estimated_prev[3]<<std::endl;
 
 
 	return true;
@@ -43,7 +67,7 @@ class IMUFunctor{
 
 };
 
-
+int i=0;
 class PoseError{
 	public:
 
@@ -56,42 +80,32 @@ class PoseError{
     	 // Eigen::Map<const Eigen::Quaternion<T> > omega_observed_b(omega_observed_);
 
     	  //Eigen::Quaternion<T> omega_measured_q = Eigen::Quaternion<T> >(w_,x_,y_,z_);
-
+    	  /*
+    	  std::cout<<"omega"<<omega_observed_.w()<<std::endl;
+    	  std::cout<<omega_observed_.x()<<std::endl;
+    	  std::cout<<omega_observed_.y()<<std::endl;
+    	  std::cout<<omega_observed_.z()<<std::endl;*/
     	  Eigen::Map<const Eigen::Quaternion<T> > pose_hat(robot_pose_estimated);
     	  Eigen::Quaternion<T> omega_observed_inverse = omega_observed_.template cast<T>();
     	  Eigen::Quaternion<T> omega_obs_invs = omega_observed_inverse.conjugate();
+
     	  Eigen::Quaternion<T> delta_q = omega_obs_invs * pose_hat;
+    	  /*
+    	  std::cout<<"delta Pose"<<delta_q.w()<<std::endl;
+    	  	std::cout<<"delta Pose"<<delta_q.x()<<std::endl;
+    	  	std::cout<<"delta Pose"<<delta_q.y()<<std::endl;
+    	  	std::cout<<"delta Pose"<<delta_q.z()<<std::endl;*/
     	  Eigen::Map<Eigen::Matrix<T,3,1> > residuals(residual);
-    	  residuals = delta_q.vec();
+    	  residuals = T(8.0) * delta_q.vec();
+
+    		std::cout<<"current robot pose R vertex"<<robot_pose_estimated[0]<<std::endl;
+    		std::cout<<robot_pose_estimated[1]<<std::endl;
+    		std::cout<<robot_pose_estimated[2]<<std::endl;
+    		std::cout<<robot_pose_estimated[3]<<std::endl;
 
 
 
 
-
-    	  	  	  //Eigen::Quaternion<T> omega_measured =
-               // Eigen::Map<const Eigen::Quaternion<T> > pose_hat(robot_pose_estimated);
-               // Eigen::Quaternion<T> delta_q = pose_hat.conjugate() * t_omega_measured_;
-
-
-
-
-               // Eigen::Quaternion<T> robot_pose_inverse = pose_hat.conjugate();
-                //Eigen::Quaternion<T> robot_pose_inverse = t_omega_measured_.q.conjugate();
-                //Eigen::Quaternion<T> measured = t_omega_measured_.template cast<T>();
-                //Eigen::Quaternion<T> delta_q = robot_pose_inverse.template cast<T>() * pose_hat;
-
-
-
-                //residual in quaternion
-               // Eigen::Map<Eigen::Matrix<T,3,1> > residuals(residual);
-
-               // residuals = delta_q.vec();
-
-                /*
-                residuals[0] = aux(0);
-                residuals[1] = aux(1);
-                residuals[2] = aux(2);
-*/
                 return true;
 
             }
