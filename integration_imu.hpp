@@ -24,23 +24,27 @@ namespace examples{
 
 struct Pose3d{
 
+	Eigen::Vector3d v_x;
+	Eigen::Vector3d v_y;
 	Eigen::Quaterniond q;
 
 	static std::string name(){
-		return "VERTEX_SO3:QUAT";
+		return "VEC_R3:QUAT";
 	}
 
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 std::istream& operator>>(std::istream& input, Pose3d& pose){
-	input >> pose.q.w() >> pose.q.x() >> pose.q.y() >> pose.q.z();
+	input >> pose.v_x.x() >> pose.v_x.y() >>pose.v_x.z() >> pose.v_y.x() >> pose.v_y.y()>> pose.v_y.z()>> pose.q.w() >> pose.q.x() >> pose.q.y() >> pose.q.z();
 
 	return input;
 }
 
 typedef std::map<int,Pose3d, std::less<int>,
 				Eigen::aligned_allocator<std::pair<const int, Pose3d> > > MapOfPoses;
+
+
 
 
 struct Constraint3d{

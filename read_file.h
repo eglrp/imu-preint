@@ -57,7 +57,9 @@ template <typename Pose, typename Allocator>
 
            //Ensure no duplicate poses
 
-           (*poses)[id] = pose;}
+           (*poses)[id] = pose;
+}
+
 
 //Reads the constraint between two vertices
 //vector
@@ -74,7 +76,7 @@ template <typename Constraint, typename Allocator>
 
 
 
-template <typename Pose, typename Constraint, typename MapAllocator, typename VectorAllocator>
+template <typename Pose, typename Constraint, typename MapAllocator,  typename VectorAllocator>
 bool ReadFile(const std::string& filename,
 				std::map<int,Pose,std::less<int>, MapAllocator>* poses,
 				std::vector<Constraint,VectorAllocator>* constraints)
@@ -98,6 +100,7 @@ bool ReadFile(const std::string& filename,
 		if(data_type == Pose::name()){
 			ReadVertex(&infile, poses);
 		}
+
 		else if (data_type == Constraint::name()){
 			ReadConstraint(&infile,constraints);
 		}
