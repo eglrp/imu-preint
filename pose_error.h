@@ -136,7 +136,11 @@ class AttitudeError_y{
 
 			Eigen::Quaternion<T> vector_rotated = pose_hat * vector_b_y_constant * pose_hat.conjugate();
 
-
+			std::cout<<"robot pose"<<std::endl;
+			std::cout<<robot_pose_estimated[0]<<std::endl;
+			std::cout<<robot_pose_estimated[1]<<std::endl;
+			std::cout<<robot_pose_estimated[2]<<std::endl;
+			std::cout<<robot_pose_estimated[3]<<std::endl;
 
 			Eigen::Map<Eigen::Matrix<T,3,1> > residuals(residual);
 			residuals = p_y_world - vector_rotated.vec();

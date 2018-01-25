@@ -54,7 +54,10 @@ namespace ceres{
     		solver_options.max_num_consecutive_invalid_steps = 1000;
 
     		ceres::LossFunction* loss_function = NULL;
+    		ceres::LossFunction* loss_omega = new CauchyLoss(0.5);
     		ceres::LocalParameterization *quaternion_local_parameterization = new EigenQuaternionParameterization;
+
+
 
     		int index = 0;
 
@@ -72,22 +75,21 @@ namespace ceres{
     			vector_b_y = Eigen::Quaternion<double>::Quaternion(0,pair.second.v_y.x(),pair.second.v_y.y(),pair.second.v_y.z());
 
 
-    			/*
-    			current_pose_to_optimize -> second.q.w() = 1;
-    			current_pose_to_optimize -> second.q.x() = 0;
-    			current_pose_to_optimize -> second.q.y() = 0;
-    			current_pose_to_optimize -> second.q.z() = 0;*/
-
     			ceres::CostFunction* cost_function_x = AttitudeError_x::Create(vector_b_x);
     			ceres::CostFunction* cost_function_y = AttitudeError_y::Create(vector_b_y);
 
     			problem.AddResidualBlock(cost_function_x,loss_function,current_pose_to_optimize->second.q.coeffs().data());
-
     			problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
     			problem.AddResidualBlock(cost_function_y,loss_function,current_pose_to_optimize->second.q.coeffs().data());
     			problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
 
+    			/*
+    			if (index==0)
+    			{
 
+    				problem.SetParameterBlockConstant(current_pose_to_optimize->second.q.coeffs().data());
+
+    			}*/
 
     			//Add angular velocity edges
 
@@ -106,10 +108,18 @@ namespace ceres{
     				problem.AddResidualBlock(constraint_cost_function, loss_function, prev_pose_to_optimize->second.q.coeffs().data(),current_pose_to_optimize->second.q.coeffs().data());
     				problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
     				problem.SetParameterization(prev_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+    				/*
+    				if (index-1 ==0){
+    					problem.SetParameterBlockConstant(prev_pose_to_optimize->second.q.coeffs().data());
+    				}*/
     			}
 
     			ceres::Solve(solver_options,&problem,summary);
 
+    			std::cout<<current_pose_to_optimize->second.q.w()<<std::endl;
+    			std::cout<<current_pose_to_optimize->second.q.x()<<std::endl;
+    			std::cout<<current_pose_to_optimize->second.q.y()<<std::endl;
+    			std::cout<<current_pose_to_optimize->second.q.z()<<std::endl;
 
     			index = index +1;
     		}//for loop to iterate Pose3d
