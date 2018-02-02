@@ -88,6 +88,7 @@ bool ReadFile(const std::string& filename,
 	constraints ->clear();
 
 	std::ifstream infile(filename.c_str());
+
 	if (!infile){
 		return false;
 	}

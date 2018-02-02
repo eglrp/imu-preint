@@ -16,195 +16,286 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
+
 #include "ceres/ceres.h"
 #include "ceres/rotation.h"
 #include "read_file.h"
-#include "pose_error.h"
 #include "glog/logging.h"
+#include "pose_error.h"
 #include "integration_imu.hpp"
+#include "preintegration_func.hpp"
+#include "preintegration_func.cpp"
 
-
-DEFINE_string(input,"/Users/shinfang/Documents/MATLAB/preintegration_theory/omega_vec_sinu_noisy.txt","The file is similar to g2o format");
-
+DEFINE_string(input,"/Users/shinfang/Documents/MATLAB/preintegration_theory/omega_vec_bias.txt","The file is similar to g2o format");
+preintegration_func IMU_Integration;
 namespace ceres{
-    namespace examples{
 
-    bool OutputPoses(const std::string& filename, const MapOfPoses& poses){
-    				std::fstream outfile;
-    				outfile.open(filename.c_str(), std::istream::out);
+	namespace examples{
 
-    for (std::map<int, Pose3d, std::less<int>, Eigen::aligned_allocator<std::pair<const int, Pose3d> > >::const_iterator poses_iter= poses.begin();poses_iter!=poses.end();++poses_iter){
-
-    		const std::map<int,Pose3d, std::less<int>, Eigen::aligned_allocator<std::pair<const int, Pose3d> > >::value_type& pair = *poses_iter;
-
-
-    		outfile << pair.second.q.w()<<" "<<pair.second.q.x()<<" "<<pair.second.q.y()<<" "<<pair.second.q.z()<<" "<<std::endl;
-
-
-    		}
-    return true;
-
-    }
-
-    void BuildOptimizationProblem(std::map<int,Eigen::Quaterniond> &temp_map, MapOfPoses* poses, ceres::Solver::Summary* summary){
-
-    		ceres::Problem problem;
-    		ceres::Solver::Options solver_options;
-    		solver_options.minimizer_progress_to_stdout = true;
-    		solver_options.max_num_consecutive_invalid_steps = 1000;
-
-    		ceres::LossFunction* loss_function = NULL;
-    		ceres::LossFunction* loss_omega = new CauchyLoss(0.5);
-    		ceres::LocalParameterization *quaternion_local_parameterization = new EigenQuaternionParameterization;
+	void BuildOptimizationProblem_Main(std::map<int,Eigen::Quaterniond>& temp_map, MapOfPoses* poses)
+	{
+		ceres::Problem problem;
+		ceres::Solver::Options solver_options;
+		ceres::Solver::Summary summary;
+		solver_options.minimizer_progress_to_stdout = true;
+		solver_options.max_num_consecutive_invalid_steps = 1000;
+		solver_options.max_num_iterations = 1;
 
 
+		ceres::LossFunction* loss_function = NULL;
+		ceres::LocalParameterization *quaternion_local_parameterization = new ceres::EigenQuaternionParameterization;
 
-    		int index = 0;
+		int index = 0;
 
-    		for (std::map<int,Pose3d,std::less<int>, Eigen::aligned_allocator<std::pair<const int,Pose3d> > >::const_iterator poses_iter =poses->begin();poses_iter!=poses->end(); ++poses_iter)
-    		{
-    			const std::map<int, Pose3d, std::less<int>, Eigen::aligned_allocator<std::pair<const int,Pose3d> > >::value_type pair = *poses_iter;
+		for (std::map<int,Pose3d, std::less<int>, Eigen::aligned_allocator<std::pair<const int,Pose3d> > >::const_iterator attitude_iterator= poses->begin();attitude_iterator!=poses->end();++attitude_iterator)
+		{
 
-    			MapOfPoses::iterator current_pose_to_optimize = poses->find(index);
+		const std::map<int,Pose3d, std::less<int>,Eigen::aligned_allocator<std::pair<const int,Pose3d> > >::value_type pair = *attitude_iterator;
+		MapOfPoses::iterator current_pose_to_optimize = poses->find(index);
 
-    			Eigen::Quaternion<double> vector_b_x;
-    			Eigen::Quaternion<double> vector_b_y;
-    			Eigen::Quaternion<double> Constraint_imu;
-
-    			vector_b_x = Eigen::Quaternion<double>::Quaternion(0,pair.second.v_x.x(),pair.second.v_x.y(),pair.second.v_x.z());
-    			vector_b_y = Eigen::Quaternion<double>::Quaternion(0,pair.second.v_y.x(),pair.second.v_y.y(),pair.second.v_y.z());
-
-
-    			ceres::CostFunction* cost_function_x = AttitudeError_x::Create(vector_b_x);
-    			ceres::CostFunction* cost_function_y = AttitudeError_y::Create(vector_b_y);
-
-    			problem.AddResidualBlock(cost_function_x,loss_function,current_pose_to_optimize->second.q.coeffs().data());
-    			problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
-    			problem.AddResidualBlock(cost_function_y,loss_function,current_pose_to_optimize->second.q.coeffs().data());
-    			problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
-
-    			/*
-    			if (index==0)
-    			{
-
-    				problem.SetParameterBlockConstant(current_pose_to_optimize->second.q.coeffs().data());
-
-    			}*/
-
-    			//Add angular velocity edges
-
-    			if (index>0){
+		Eigen::Quaternion<double> vector_b_x;
+		Eigen::Quaternion<double> vector_b_y;
+		Eigen::Quaternion<double> Constraint_imu;
 
 
-    				std::map<int,Eigen::Quaterniond>::iterator preint_constraint = temp_map.find(index);
-
-    				Constraint_imu = Eigen::Quaternion<double>::Quaternion(preint_constraint->second.w(),preint_constraint->second.x(),preint_constraint->second.y(),preint_constraint->second.z());
-
-    				MapOfPoses::iterator prev_pose_to_optimize = poses->find(index-1);
+		vector_b_x = Eigen::Quaternion<double>::Quaternion(0,pair.second.v_x.x(),pair.second.v_x.y(),pair.second.v_x.z());
+		vector_b_y = Eigen::Quaternion<double>::Quaternion(0,pair.second.v_y.x(),pair.second.v_y.y(),pair.second.v_y.z());
 
 
+		ceres::CostFunction* cost_function_x = AttitudeError_x::Create(vector_b_x);
+		ceres::CostFunction* cost_function_y = AttitudeError_y::Create(vector_b_y);
 
-    				ceres::CostFunction* constraint_cost_function = IMUFunctor::Create(Constraint_imu);
-    				problem.AddResidualBlock(constraint_cost_function, loss_function, prev_pose_to_optimize->second.q.coeffs().data(),current_pose_to_optimize->second.q.coeffs().data());
-    				problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
-    				problem.SetParameterization(prev_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
-    				/*
-    				if (index-1 ==0){
-    					problem.SetParameterBlockConstant(prev_pose_to_optimize->second.q.coeffs().data());
-    				}*/
-    			}
+		problem.AddResidualBlock(cost_function_x,loss_function,current_pose_to_optimize->second.q.coeffs().data());
+		problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
 
-    			ceres::Solve(solver_options,&problem,summary);
+		problem.AddResidualBlock(cost_function_y,loss_function,current_pose_to_optimize->second.q.coeffs().data());
+		problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
 
-    			std::cout<<current_pose_to_optimize->second.q.w()<<std::endl;
-    			std::cout<<current_pose_to_optimize->second.q.x()<<std::endl;
-    			std::cout<<current_pose_to_optimize->second.q.y()<<std::endl;
-    			std::cout<<current_pose_to_optimize->second.q.z()<<std::endl;
+		if (index>0)
+		{
+			std::map<int,Eigen::Quaterniond>::iterator preint_constraint = temp_map.find(index);
 
-    			index = index +1;
-    		}//for loop to iterate Pose3d
+		    	Constraint_imu = Eigen::Quaternion<double>::Quaternion(preint_constraint->second.w(),preint_constraint->second.x(),preint_constraint->second.y(),preint_constraint->second.z());
 
-    }
+		    	MapOfPoses::iterator prev_pose_to_optimize = poses->find(index-1);
+		    	ceres::CostFunction* constraint_cost_function = IMUFunctor::Create(IMU_Integration.Preintegrated_omega,Constraint_imu,index);
+		    	problem.AddResidualBlock(constraint_cost_function, loss_function, prev_pose_to_optimize->second.q.coeffs().data(),current_pose_to_optimize->second.q.coeffs().data());
+		    	problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+		    	problem.SetParameterization(prev_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+		} //if loop
+
+		ceres::Solve(solver_options,&problem,&summary);
+		index = index +1;
+		}//for loop
+
+		std::cout<<summary.FullReport()<<std::endl;
+	}
+
+	bool OutputPoses(const std::string& filename, const MapOfPoses& poses){
+	    				std::fstream outfile;
+	    				outfile.open(filename.c_str(), std::istream::out);
+
+	    for (std::map<int, Pose3d, std::less<int>, Eigen::aligned_allocator<std::pair<const int, Pose3d> > >::const_iterator poses_iter= poses.begin();poses_iter!=poses.end();++poses_iter){
+
+	    		const std::map<int,Pose3d, std::less<int>, Eigen::aligned_allocator<std::pair<const int, Pose3d> > >::value_type& pair = *poses_iter;
 
 
+	    		outfile << pair.second.q.w()<<" "<<pair.second.q.x()<<" "<<pair.second.q.y()<<" "<<pair.second.q.z()<<" "<<pair.second.b.x()<<" "<<pair.second.b.y()<<" "<<pair.second.b.z()<<" "<<std::endl;
 
-    }//examples
+
+	    		}
+	    return true;
+
+	    }
+
+
+	}//examples
 }//ceres
+
 int main(int argc, char** argv)
 
 {
-
     google::InitGoogleLogging(argv[0]);
     CERES_GFLAGS_NAMESPACE::ParseCommandLineFlags(&argc, &argv, true);
 
+    MapOfPoses poses;
+    VectorOfConstraints constraints;
+    std::map<int,Eigen::Quaterniond> Preintegrated_Map;
+    //preintegration_func IMU_Integration;
 
-    ceres::examples::MapOfPoses poses;
-    ceres::examples::VectorOfConstraints constraints;
-
-
-    //Poses to store as Estimated Pose
     ceres::examples::ReadFile(FLAGS_input,&poses,&constraints);
+    IMU_Integration.Preintegrated_omega = IMU_Integration.Preintegration(constraints,&poses);
+    /*
+    for (std::map<int, Eigen::Quaterniond>::const_iterator poses_iter= IMU_Integration.Preintegrated_omega.begin();poses_iter!=IMU_Integration.Preintegrated_omega.end();++poses_iter){
+    					std::cout<<poses_iter->first<<":"<<poses_iter->second.w()<<std::endl;
+    					std::cout<<poses_iter->first<<":"<<poses_iter->second.x()<<std::endl;
+    					std::cout<<poses_iter->first<<":"<<poses_iter->second.y()<<std::endl;
+    					std::cout<<poses_iter->first<<":"<<poses_iter->second.z()<<std::endl;
+    }*/
+
+    ceres::Problem problem;
+    ceres::Solver::Options solver_options;
+    	ceres::Solver::Summary summary;
+    	solver_options.minimizer_progress_to_stdout = true;
+    	solver_options.max_num_consecutive_invalid_steps = 1000;
+    	solver_options.max_num_iterations = 1;
 
 
-    //Vertex to store as Measured Pose
+    	ceres::LossFunction* loss_function = NULL;
+    	ceres::LocalParameterization *quaternion_local_parameterization = new ceres::EigenQuaternionParameterization;
 
-    int count = 0;
-    int index = 1;
+    int pointer_index =0;
+    //int preintegrate_index = 1;
 
-    //map to store preintegrated omega
-    std::map<int,Eigen::Quaterniond> Preintegrated_omega;
-    std::map<int,Eigen::Quaterniond>::iterator it= Preintegrated_omega.begin();
+    std::map<int,Eigen::Quaterniond> temp_map = IMU_Integration.Preintegrated_omega;
+   // std::map<int,Eigen::Quaterniond> &temp_map = IMU_Integration.Preintegrated_omega;
 
-
-    Eigen::Matrix<double,3,3> originOmega = Eigen::Matrix<double,3,3>::Identity();
-    Eigen::Matrix<double,3,3> Omegahat = Eigen::Matrix<double,3,3>::Zero();
-    Eigen::Matrix<double,3,3> Omegahatx = Eigen::Matrix<double,3,3>::Zero();
-
-    //Eigen::Quaterniond omega_q;
-
-    //Integrate measured omega (IMU)
-
-    for(ceres::examples::VectorOfConstraints::iterator constraints_iter =constraints.begin();constraints_iter!=constraints.end(); ++constraints_iter)
-    {
-        const ceres::examples::Constraint3d& constraint = *constraints_iter;
-        count = count +1;
+    //initialization of the variable to store the first R
+    Eigen::Quaternion<double> current_optimized_pose;
+    Eigen::Quaternion<double> prev_optimized_pose;
 
 
-        Omegahat <<0, -constraint.o.z(), constraint.o.y(),
-        constraint.o.z(),0,-constraint.o.x(),
-        -constraint.o.y(),constraint.o.x(),0;
+    //optimization begins here
+    //prev_optimized_pose = Eigen::Quaternion<double>::Quaternion(1,0,0,0);
+ for (std::map<int,Pose3d, std::less<int>, Eigen::aligned_allocator<std::pair<const int,Pose3d> > >::const_iterator attitude_iterator= poses.begin();attitude_iterator!=poses.end();++attitude_iterator)
+ {
+	 	//double angle_diff = 10;
 
-        Omegahatx = originOmega * Omegahat.exp();
+	const std::map<int,Pose3d, std::less<int>,Eigen::aligned_allocator<std::pair<const int,Pose3d> > >::value_type pair = *attitude_iterator;
+    	MapOfPoses::iterator current_pose_to_optimize = poses.find(pointer_index);
+    	std::cout<<"pointer index"<<pointer_index<<std::endl;
+    	//std::cout<<"CURRENT POSE"<<current_pose_to_optimize->second.q.w()<<std::endl;
 
-        originOmega = Omegahatx;
+    	Eigen::Quaternion<double> vector_b_x;
+    	Eigen::Quaternion<double> vector_b_y;
+    Eigen::Quaternion<double> Constraint_imu;
+    Eigen::Vector3d bias_vec ;
 
-        if (count%4==0)
-        {
-        	Eigen::Quaterniond omega_q(Omegahatx);
+    	bias_vec<<0.1,0.1,0.1;
+    	vector_b_x = Eigen::Quaternion<double>::Quaternion(0,pair.second.v_x.x(),pair.second.v_x.y(),pair.second.v_x.z());
+    	vector_b_y = Eigen::Quaternion<double>::Quaternion(0,pair.second.v_y.x(),pair.second.v_y.y(),pair.second.v_y.z());
 
-        omega_q.normalize();
+    //bias_vec <<pair.second.b.x(),pair.second.b.y(),pair.second.b.z();
 
-        Preintegrated_omega[index] = omega_q;
-        index = index+1;
-        originOmega = Eigen::Matrix<double,3,3>::Identity();
-        }
 
-    }//for loop
+    	ceres::CostFunction* cost_function_x = ceres::examples::AttitudeError_x::Create(vector_b_x);
+    	ceres::CostFunction* cost_function_y = ceres::examples::AttitudeError_y::Create(vector_b_y);
 
-    for (it=Preintegrated_omega.begin();it!=Preintegrated_omega.end();++it){
-    	std::cout<<"preint first"<<it->first<<std::endl;
-    	std::cout<<it->second.w()<<std::endl;
-    	std::cout<<it->second.x()<<std::endl;
-    	std::cout<<it->second.y()<<std::endl;
-    	std::cout<<it->second.z()<<std::endl;
-    }
+    		//???? do i really need to pass the updated bias_g
+    		//return bias just for the preintegrated function to recompute the preintegrated omega measurement
+    		///ceres::CostFunction* cost_function_bias = ceres::examples::Bias::Create(bias_vec);
 
-    ceres::Solver::Summary summary;
-    ceres::examples::BuildOptimizationProblem(Preintegrated_omega, &poses, &summary);
 
-    std::cout<<summary.FullReport()<<std::endl;
-    ceres::examples::OutputPoses("poses_optimized_vec_sinu_noisy.txt",poses);
+    	problem.AddResidualBlock(cost_function_x,loss_function,current_pose_to_optimize->second.q.coeffs().data());
+    	problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
 
-    return 0;
+    	problem.AddResidualBlock(cost_function_y,loss_function,current_pose_to_optimize->second.q.coeffs().data());
+    	problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+
+    ///problem.AddResidualBlock(cost_function_bias, loss_function, current_pose_to_optimize->second.b.data());
+    prev_optimized_pose = Eigen::Quaternion<double>::Quaternion(current_pose_to_optimize->second.q.w(),current_pose_to_optimize->second.q.x(),current_pose_to_optimize->second.q.y(),current_pose_to_optimize->second.q.z());
+    		//std::cout<<"Prior to optimization"<<prev_optimized_pose.w()<<std::endl;
+    		//double angle = 2*acos(1);
+
+    	if (pointer_index>0)
+    	{
+
+    	std::map<int,Eigen::Quaterniond>::iterator preint_constraint = temp_map.find(pointer_index);
+
+    	Constraint_imu = Eigen::Quaternion<double>::Quaternion(preint_constraint->second.w(),preint_constraint->second.x(),preint_constraint->second.y(),preint_constraint->second.z());
+
+
+    	MapOfPoses::iterator prev_pose_to_optimize = poses.find(pointer_index-1);
+
+    	//std::cout<<"Print value here"<<IMU_Integration.Preintegrated_omega.find(pointer_index)->second.w()<<std::endl;
+
+    	//cost function for omega measurements
+    	ceres::CostFunction* constraint_cost_function = ceres::examples::IMUFunctor::Create(IMU_Integration.Preintegrated_omega,Constraint_imu,pointer_index);
+    	problem.AddResidualBlock(constraint_cost_function, loss_function, prev_pose_to_optimize->second.q.coeffs().data(),current_pose_to_optimize->second.q.coeffs().data());
+    	problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+    	problem.SetParameterization(prev_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+
+    	//cost function for bias
+    	ceres::CostFunction* cost_function_bias = ceres::examples::Bias::Create(bias_vec);
+
+    	problem.AddResidualBlock(cost_function_bias, loss_function, prev_pose_to_optimize->second.b.data(),current_pose_to_optimize->second.b.data());
+
+    	} //end if for adding residual block for edges preintegrated omega measurements
+
+
+    	pointer_index = pointer_index + 1;
+    	double angle_diff = 10;
+    		//std::cout<<"optimized_bias before solving iteration "<< current_pose_to_optimize->second.b<<std::endl;
+
+    for (int i =0; i <10; i++)
+    	{
+    	ceres::Solve(solver_options,&problem,&summary);
+    	std::cout<<"bias estimate"<<current_pose_to_optimize->second.b.x()<<std::endl;
+    	std::cout<<"estimated attitude"<<current_pose_to_optimize->second.q.w()<<current_pose_to_optimize->second.q.x()<<current_pose_to_optimize->second.q.y()<<current_pose_to_optimize->second.q.z()<<std::endl;
+    	//current_optimized_pose = Eigen::Quaternion<double>::Quaternion(current_pose_to_optimize->second.q.w(),current_pose_to_optimize->second.q.x(),current_pose_to_optimize->second.q.y(),current_pose_to_optimize->second.q.z());
+    	//Eigen::Quaternion<double> quat_mul = prev_optimized_pose.conjugate() * current_optimized_pose;
+    	//angle_diff = 2*acos(quat_mul.w());
+    //std::cout<<"ANGLE :"<<angle_diff<<std::endl;
+    //	prev_optimized_pose = current_optimized_pose;
+     IMU_Integration.Preintegrated_omega = IMU_Integration.Preintegration(constraints,&poses);
+
+    	/*
+    	for (std::map<int, Eigen::Quaterniond>::const_iterator poses_iter= IMU_Integration.Preintegrated_omega.begin();poses_iter!=IMU_Integration.Preintegrated_omega.end();++poses_iter){
+    	  std::cout<<poses_iter->first<<":"<<poses_iter->second.w()<<std::endl;
+    	   std::cout<<poses_iter->first<<":"<<poses_iter->second.x()<<std::endl;
+    	    std::cout<<poses_iter->first<<":"<<poses_iter->second.y()<<std::endl;
+    	    	std::cout<<poses_iter->first<<":"<<poses_iter->second.z()<<std::endl; }*/
+
+   	std::cout<<"bias estimate x"<<current_pose_to_optimize->second.b.x()<<std::endl;
+   	std::cout<<"bias estimate y"<<current_pose_to_optimize->second.b.y()<<std::endl;
+   	std::cout<<"bias estimate z"<<current_pose_to_optimize->second.b.z()<<std::endl;
+
+    	}
+
+
+ }
+    	//compute the angle prior and after optimization
+    	//Eigen::Quaternion<double> quat_mul = current_optimized_pose.conjugate() * prev_optimized_pose;
+    	//angle_diff = 2*acos(quat_mul.w());
+    	//std::cout<<"ANGLE :"<<angle_diff<<std::endl;
+    	//prev_optimized_pose = current_optimized_pose;
+
+    		//IMU_Integration.Preintegrated_omega = IMU_Integration.Preintegration(constraints,&poses);*/
+
+
+    		/*Eigen::Vector3d optimized_bias = current_pose_to_optimize->second.b;
+    		std::cout<<"optimized_bias after solving iteration "<< optimized_bias<<std::endl;*/
+    		//std::cout<<"current attitude"<<current_pose_to_optimize->second.q.w()<<std::endl;
+
+    		//IMU_Integration.bias_g_write(optimized_bias);
+
+    		/*
+
+    		 for (std::map<int, Eigen::Quaterniond>::const_iterator poses_iter= IMU_Integration.Preintegrated_omega.begin();poses_iter!=IMU_Integration.Preintegrated_omega.end();++poses_iter){
+    		    	std::cout<<poses_iter->first<<":"<<poses_iter->second.w()<<std::endl;
+    		    	std::cout<<poses_iter->first<<":"<<poses_iter->second.x()<<std::endl;
+    		    std::cout<<poses_iter->first<<":"<<poses_iter->second.y()<<std::endl;
+    		    	std::cout<<poses_iter->first<<":"<<poses_iter->second.z()<<std::endl;
+    		    }
+*/
+    		 //std::cout<<"Update Preintegrated Measurement"<<std::endl;
+    		// ceres::Solve(solver_options,&problem,&summary);
+    		// std::cout<<current_pose_to_optimize->second.q.w()<<std::endl;
+
+   // }
+
+
+ 	 std::cout<<summary.FullReport()<<std::endl;
+	 //ceres::examples::BuildOptimizationProblem_Main(Preintegrated_Map,&poses);
+ 	 ceres::examples::OutputPoses("poses_optimized_new_coding_bias.txt",poses);
+
+
+    	//IMU_Integration.BuildOptimizationProblem(Preintegrated_Map,&poses);
+
+    //Preintegrated_Map = IMU_Integration.Preintegration(constraints,&poses);
+
+
+	return 0;
+
 }
 

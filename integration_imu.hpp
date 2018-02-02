@@ -19,13 +19,11 @@
 
 
 
-namespace ceres{
-namespace examples{
-
 struct Pose3d{
 
 	Eigen::Vector3d v_x;
 	Eigen::Vector3d v_y;
+	Eigen::Vector3d b;
 	Eigen::Quaterniond q;
 
 	static std::string name(){
@@ -36,7 +34,7 @@ struct Pose3d{
 };
 
 std::istream& operator>>(std::istream& input, Pose3d& pose){
-	input >> pose.v_x.x() >> pose.v_x.y() >>pose.v_x.z() >> pose.v_y.x() >> pose.v_y.y()>> pose.v_y.z()>> pose.q.w() >> pose.q.x() >> pose.q.y() >> pose.q.z();
+	input >> pose.v_x.x() >> pose.v_x.y() >>pose.v_x.z() >> pose.v_y.x() >> pose.v_y.y()>> pose.v_y.z()>> pose.b.x()>> pose.b.y() >> pose.b.z()>> pose.q.w() >> pose.q.x() >> pose.q.y() >> pose.q.z();
 
 	return input;
 }
@@ -73,6 +71,4 @@ typedef std::vector<Constraint3d,Eigen::aligned_allocator<Constraint3d> >VectorO
 
 
 
-}//examples
-}//ceres
 #endif /* integration_imu_hpp */

@@ -6,63 +6,73 @@
 #include "ceres/autodiff_cost_function.h"
 
 #include "integration_imu.hpp"
+#include "preintegration_func.hpp"
 
 namespace ceres {
 namespace examples {
 
+//preintegration_func IMU_Integration;
+
 class IMUFunctor{
 
 	public:
-	IMUFunctor(const Eigen::Quaternion<double> constraint) : constraint_(constraint) {}
+	IMUFunctor(std::map<int,Eigen::Quaterniond> &temp_map,const Eigen::Quaternion<double> constraint_1, int index):x_(temp_map),constraint_1_(constraint_1),index_(index){}
 
 	template <typename T>
 	bool operator() (const T* const robot_pose_estimated_prev, const T* const robot_pose_estimated_curr, T* residual) const{
 
-  	 // std::cout<<"constraint in functor"<<constraint_.w()<<std::endl;
-  	  //std::cout<<constraint_.x()<<std::endl;
-  	  //std::cout<<constraint_.y()<<std::endl;
-  	  //std::cout<<constraint_.z()<<std::endl;
+		//std::map<int,Eigen::Quaterniond>::value_type pair = *constraint_1_;
+		//std::cout<<pair.second.w()<<std::endl;
+		//std::cout<<"map"<<*constraint_1_<<std::endl;
 
-	Eigen::Map<const Eigen::Quaternion<T> > pose_hat_curr(robot_pose_estimated_curr);
-	Eigen::Map<const Eigen::Quaternion<T> > pose_hat_prev(robot_pose_estimated_prev);
-	Eigen::Quaternion<T> constraint_q = constraint_.template cast<T>();
+	//std::cout<<"Enter constraint in imu functor"<<std::endl;
 
-	Eigen::Quaternion<T> delta = constraint_q.conjugate() * pose_hat_prev.conjugate() * pose_hat_curr;
-	//Eigen::Quaternion<T> delta = (pose_hat_curr.conjugate() * pose_hat_prev * constraint_q);
+	std::map<int,Eigen::Quaterniond>::iterator it = x_.find(index_);
+
+	Eigen::Quaternion<double> constraint_from_map = Eigen::Quaternion<double>::Quaternion(it->second.w(),it->second.x(),it->second.y(),it->second.z());
 
 	/*
-	std::cout<<"delta"<<delta.w()<<std::endl;
-	std::cout<<"delta"<<delta.x()<<std::endl;
-	std::cout<<"delta"<<delta.y()<<std::endl;
-	std::cout<<"delta"<<delta.z()<<std::endl;
-	std::cout<<"HI"<<std::endl;*/
+	std::cout<<constraint_from_map.w()<<std::endl;
+	std::cout<<constraint_from_map.x()<<std::endl;
+	std::cout<<constraint_from_map.y()<<std::endl;
+	std::cout<<constraint_from_map.z()<<std::endl;*/
+	Eigen::Quaternion<T> constraint_q = constraint_from_map.template cast<T>();
+
+	/*
+	std::cout<<constraint_1_.w()<<std::endl;
+	std::cout<<constraint_1_.x()<<std::endl;
+	std::cout<<constraint_1_.y()<<std::endl;
+	std::cout<<constraint_1_.z()<<std::endl;*/
+	Eigen::Map<const Eigen::Quaternion<T> > pose_hat_curr(robot_pose_estimated_curr);
+	Eigen::Map<const Eigen::Quaternion<T> > pose_hat_prev(robot_pose_estimated_prev);
+	//Eigen::Quaternion<T> constraint_q = constraint_1_.template cast<T>();
+
+	Eigen::Quaternion<T> delta = constraint_q.conjugate() * pose_hat_prev.conjugate() * pose_hat_curr;
+	//Eigen::Quaternion<T> delta = (pose_hat_curr.conjugate() * pose_hat_prev * constraint_q);*/
+
+
+
 	Eigen::Map<Eigen::Matrix<T,3,1> > residuals(residual);
 	residuals = T(8.0)* delta.vec();
-/*
-	std::cout<<"current robot pose W"<<robot_pose_estimated_curr[0]<<std::endl;
-	std::cout<<robot_pose_estimated_curr[1]<<std::endl;
-	std::cout<<robot_pose_estimated_curr[2]<<std::endl;
-	std::cout<<robot_pose_estimated_curr[3]<<std::endl;
 
-
-	std::cout<<"previous robot pose W"<<robot_pose_estimated_prev[0]<<std::endl;
-	std::cout<<robot_pose_estimated_prev[1]<<std::endl;
-	std::cout<<robot_pose_estimated_prev[2]<<std::endl;
-	std::cout<<robot_pose_estimated_prev[3]<<std::endl;
-*/
 
 	return true;
 
 	}
 
-	static ceres::CostFunction* Create(const Eigen::Quaternion<double> constraint){
+	static ceres::CostFunction* Create(std::map<int,Eigen::Quaterniond> &temp_map,const Eigen::Quaternion<double> constraint_1,int index)
+
+	{
 		return new ceres::AutoDiffCostFunction<IMUFunctor,3,4,4>(
-				new IMUFunctor(constraint));
+				new IMUFunctor(temp_map,constraint_1,index));
 	}
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 	private:
-	const Eigen::Quaternion<double> constraint_;
+	std::map<int,Eigen::Quaterniond> &x_;
+	const Eigen::Quaternion<double> constraint_1_;
+	int index_;
+
 
 };
 
@@ -136,11 +146,6 @@ class AttitudeError_y{
 
 			Eigen::Quaternion<T> vector_rotated = pose_hat * vector_b_y_constant * pose_hat.conjugate();
 
-			std::cout<<"robot pose"<<std::endl;
-			std::cout<<robot_pose_estimated[0]<<std::endl;
-			std::cout<<robot_pose_estimated[1]<<std::endl;
-			std::cout<<robot_pose_estimated[2]<<std::endl;
-			std::cout<<robot_pose_estimated[3]<<std::endl;
 
 			Eigen::Map<Eigen::Matrix<T,3,1> > residuals(residual);
 			residuals = p_y_world - vector_rotated.vec();
@@ -157,6 +162,36 @@ class AttitudeError_y{
 	private:
 		const Eigen::Quaternion<double> vector_b_y_;
 
+};
+
+class Bias{
+	public:
+	Bias(const Eigen::Vector3d bias):bias_(bias){}
+
+	template <typename T>
+	bool operator() (const T* const bias_hat_i, const T* const bias_hat_j, T* residual) const{
+
+		//std::cout<<"given bias in bias functor: "<< bias_ <<std::endl;
+		//Eigen::Matrix<T,3,1> bias_T = bias_.template cast<T>();
+		Eigen::Map<const Eigen::Matrix<T,3,1> > bias_hat_i_(bias_hat_i);
+		Eigen::Map<const Eigen::Matrix<T,3,1> > bias_hat_j_(bias_hat_j);
+		Eigen::Map<Eigen::Matrix<T,3,1> > residuals(residual);
+
+		residuals = bias_hat_i_- bias_hat_j_;
+		return true;
+	}
+
+
+
+	static ceres::CostFunction* Create(
+		const Eigen::Vector3d bias_	){
+			return new ceres::AutoDiffCostFunction<Bias,3,3,3>(new Bias(bias_));
+
+	}
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+private:
+	const Eigen::Vector3d bias_;
 };
 
 
