@@ -94,6 +94,7 @@ for (VectorOfConstraints::const_iterator constraints_iter = a.begin();constraint
 }
 
 //This function has been migrated to the main
+
 void preintegration_func::BuildOptimizationProblem(std::map<int,Eigen::Quaterniond>& temp_map, MapOfPoses* poses)
 {
 		ceres::Problem problem;
@@ -129,13 +130,13 @@ void preintegration_func::BuildOptimizationProblem(std::map<int,Eigen::Quaternio
 			//bias_vec <<pair.second.b.x(),pair.second.b.y(),pair.second.b.z();
 
 
-			ceres::CostFunction* cost_function_x = ceres::examples::AttitudeError_x::Create(vector_b_x);
+			//ceres::CostFunction* cost_function_x = ceres::examples::AttitudeError_x::Create(vector_b_x);
 			//ceres::CostFunction* cost_function_y = AttitudeError_y::Create(vector_b_y);
 			//ceres::CostFunction* cost_function_bias = ceres::examples::Bias::Create(bias_g);
 
 
-			problem.AddResidualBlock(cost_function_x,loss_function,current_pose_to_optimize->second.q.coeffs().data());
-			problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
+			//problem.AddResidualBlock(cost_function_x,loss_function,current_pose_to_optimize->second.q.coeffs().data());
+			//problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
 			//problem.AddResidualBlock(cost_function_y,loss_function,current_pose_to_optimize->second.q.coeffs().data());
 			//problem.SetParameterization(current_pose_to_optimize->second.q.coeffs().data(),quaternion_local_parameterization);
 
