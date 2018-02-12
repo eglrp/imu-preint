@@ -5,6 +5,7 @@
 #include "Eigen/Core"
 #include "Eigen/Geometry"
 #include "ceres/autodiff_cost_function.h"
+#include <fstream>
 
 #include "integration_imu.hpp"
 #include "preintegration_func.hpp"
@@ -209,10 +210,19 @@ class IMUFunctor{
 class AttitudeError_x{
 	public:
 
-	AttitudeError_x(const Eigen::Quaternion<double> vec_b_x) : vec_b_x_ (vec_b_x){ }
+
+	AttitudeError_x(const Eigen::Quaternion<double> vec_b_x, int index) : vec_b_x_ (vec_b_x) , index_(index){ }
+
+	//void file_init();
+	//std::fstream outfile;
+	/*void file_init
+	{
+		outfile.open("poses_print_here",std::istream::out);
+	}*/
 
       template <typename T>
             bool operator() (const T* const robot_pose_estimated, T* residual) const{
+
 
 
     	  Eigen::Matrix<T,3,1> p_x_world;
@@ -234,28 +244,41 @@ class AttitudeError_x{
     	  residuals = p_x_world - vector_rotated.vec();
 
 /*
-    		std::cout<<"current robot pose R vertex"<<robot_pose_estimated[0]<<std::endl;
-    		std::cout<<robot_pose_estimated[1]<<std::endl;
-    		std::cout<<robot_pose_estimated[2]<<std::endl;
-    		std::cout<<robot_pose_estimated[3]<<std::endl;*/
-    		return true;
+    			std::cout<<"current robot pose R vertex"<<robot_pose_estimated[0]<<std::endl;
+    			std::cout<<robot_pose_estimated[1]<<std::endl;
+    			std::cout<<robot_pose_estimated[2]<<std::endl;
+    			std::cout<<robot_pose_estimated[3]<<std::endl;*/
+
+    	  	    std::fstream residual_file;
+    	  	    residual_file.open("print_poses.txt",std::fstream::out | std::fstream::app);
+    	  	    residual_file<<"Residuals x "<<index_<<": "<<residuals[0]<<std::endl;
+    	  	    	residual_file<<"Residuals y "<<index_<<": "<<residuals[1]<<std::endl;
+    	  	    	residual_file<<"Residuals z "<<index_<<": "<<residuals[2]<<std::endl;
+
+        	  	std::cout<<"Residuals x "<<index_<<": "<<residuals[0]<<std::endl;
+        	  	std::cout<<"Residuals y "<<index_<<": "<<residuals[1]<<std::endl;
+        	  	std::cout<<"Residuals z "<<index_<<": "<<residuals[2]<<std::endl;
+    	  	    	return true;
 
             }
 
-            static ceres::CostFunction* Create(
 
-				const Eigen::Quaternion<double> vec_b_x)
+            static ceres::CostFunction* Create(const Eigen::Quaternion<double> vec_b_x, int pointer_index)
             {
-                return new ceres::AutoDiffCostFunction<AttitudeError_x,3,4>(new AttitudeError_x(vec_b_x));
+                return new ceres::AutoDiffCostFunction<AttitudeError_x,3,4>(new AttitudeError_x(vec_b_x, pointer_index));
 
             }
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 
 private:
+		//members of the class
        const Eigen::Quaternion<double> vec_b_x_;
+       int index_;
+
 
         };
+
 
 
 class AttitudeError_y{
